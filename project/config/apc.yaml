@@ -1,0 +1,23 @@
+window_size: 2
+dt: 0.01
+quiet: True
+thrusters: 6
+dt_int: euler
+
+noises:
+  Q_eta: 1e-6
+  Q_nu_r: 1e-6
+  Q_f: 1e-6
+  R_xy: 1e-6
+  R_z: 1e-6
+  R_dr: 2e-6
+  R_att: 1e-4
+  R_linvel: 1e-6
+  R_angvel: 0.137e-4
+  R_linacc: 0.2029e-4
+
+bounds:
+  umin: -0.1
+  umax: 0.1
+  xmin: [-100, -100, -100., -3.14, -3.14, -3.14, -2.5, -2.5, -2.5, -0.25, -0.25, -0.25]
+  xmax: [100, 100, 100, 3.14, 3.14, 3.14, 2.5, 2.5, 2.5, 0.25, 0.25, 0.25]
