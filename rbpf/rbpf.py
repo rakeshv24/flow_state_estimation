@@ -8,6 +8,18 @@ from kf.kalman import KalmanFilter as kf
 
 class RBPF:
     def __init__(self, Q, R, f, h, Q_f, R_f, kf_f, kf_h, f1_state):
+        """
+        Args:
+            Q: Process noise covariance matrix.
+            R: Measurement noise covariance matrix.
+            f: Transition function.
+            h: Measurement function.
+            Q_f: Process noise covariance matrix for the Kalman filter.
+            R_f: Measurement noise covariance matrix for the Kalman filter.
+            kf_f: Transition function for the Kalman filter.
+            kf_h: Measurement function for the Kalman filter.
+            f1_state: Initial flow state.
+        """
         self.Q = Q
         self.R = R
         self.f = f
@@ -19,6 +31,13 @@ class RBPF:
         self.f1_state = f1_state
 
     def initialize(self, n, mean, cov):
+        """Initialize the Rao-Blackwellized Particle Filter.
+
+        Args:
+            n: Number of particles.
+            mean: Mean of the initial state.
+            cov: Covariance of the initial state.
+        """
         self.particles = {
             "x": np.zeros((mean.shape[0], n)),
             "w": np.zeros((1, n)),
@@ -58,6 +77,16 @@ class RBPF:
         )
 
     def predict(self, u):
+        """Predict the state of the system.
+
+        Args:
+            u: Control input.
+
+        Returns:
+            state_pred: Predicted state of the system.
+            f_B_pred: Predicted flow state.
+            cov_pred: Predicted covariance of the state.
+        """
         for i in range(self.n_particles):
             x = self.particles["x"][:, i].reshape(-1, 1)
             kf = self.particles["kf"][i]
@@ -90,6 +119,18 @@ class RBPF:
         return state_pred, f_B_pred, cov_pred
 
     def update(self, z, z_f, u):
+        """Update the state of the system.
+
+        Args:
+            z: Measurement.
+            z_f: Measurement of the flow state.
+            u: Control input.
+
+        Returns:
+            state_est: Estimated state of the system.
+            f_B_est: Estimated flow state.
+            cov_est: Estimated covariance of the state.
+        """
         ratio = 0.5
 
         w = self.likelihood(z, z_f, u)
@@ -125,6 +166,16 @@ class RBPF:
         return state_est, f_B_est, cov_est
 
     def likelihood(self, z, z_f, u):
+        """Calculates the likelihood of the measurement.
+
+        Args:
+            z: measurement
+            z_f: measurement of the flow state
+            u: control input
+
+        Returns:
+            w: likelihood of the measurement
+        """
         w = np.zeros((1, self.n_particles))
         for i in range(self.n_particles):
             x = self.particles["x"][:, i].reshape(-1, 1)

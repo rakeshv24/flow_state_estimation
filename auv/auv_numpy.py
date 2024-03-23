@@ -8,6 +8,11 @@ from utils.utils import skew
 
 class AUV(object):
     def __init__(self, vehicle_dynamics):
+        """Initializes the AUV object.
+
+        Args:
+            vehicle_dynamics: Dictionary containing the vehicle dynamics parameters.
+        """
         self.vehicle_mass = vehicle_dynamics["vehicle_mass"]
         self.rb_mass = vehicle_dynamics["rb_mass"]
         self.added_mass = vehicle_dynamics["added_mass"]
@@ -68,6 +73,14 @@ class AUV(object):
         return cls(vehicle_dynamics)
 
     def compute_transformation_matrix(self, x):
+        """Computes the transformation matrix from Body to NED frame.
+
+        Args:
+            x: State vector.
+
+        Returns:
+            tf_mtx: Transformation matrix.
+        """
         rot_mtx = np.eye(3)
         rot_mtx[0, 0] = cos(x[5]) * cos(x[4])
         rot_mtx[0, 1] = -sin(x[5]) * cos(x[3]) + cos(x[5]) * sin(x[4]) * sin(x[3])
@@ -94,6 +107,14 @@ class AUV(object):
         return tf_mtx
 
     def compute_C_RB_force(self, v):
+        """Computes the Rigid-body Coriolis force matrix.
+
+        Args:
+            v: Velocity vector.
+
+        Returns:
+            coriolis_force: Rigid-body Coriolis force matrix.
+        """
         v1 = v[0:3, 0]
         v2 = v[3:6, 0]
 
@@ -111,6 +132,14 @@ class AUV(object):
         return coriolis_force
 
     def compute_C_A_force(self, v):
+        """Computes the Added-mass Coriolis force matrix.
+
+        Args:
+            v: Velocity vector.
+
+        Returns:
+            coriolis_force: Added-mass Coriolis force matrix.
+        """
         v1 = v[0:3, 0]
         v2 = v[3:6, 0]
 
@@ -131,10 +160,26 @@ class AUV(object):
         return coriolis_force
 
     def compute_damping_force(self, v):
+        """Computes the damping force.
+
+        Args:
+            v: velocity vector.
+
+        Returns:
+            damping_force: Damping force.
+        """
         damping_force = (self.quad_damp * fabs(v)) + self.lin_damp
         return damping_force
 
     def compute_restorive_force(self, x):
+        """Computes the restorive force.
+
+        Args:
+            x: State vector.
+
+        Returns:
+            restorive_force: Restorive force.
+        """
         if self.neutral_bouy:
             restorive_force = (self.cog_to_cob * self.W) * np.vstack(
                 (0.0, 0.0, 0.0, cos(x[4]) * sin(x[3]), sin(x[4]), 0.0)
@@ -161,9 +206,6 @@ class AUV(object):
                     - (self.cog[1] * self.W - self.cob[1] * self.B) * sin(x[4]),
                 )
             )
-            # self.z_g * self.W * cos(x[4]) * sin(x[3]),
-            # self.z_g * self.W * sin(x[4]),
-            # 0.0))
         return restorive_force
 
     def compute_nonlinear_dynamics(
@@ -175,6 +217,19 @@ class AUV(object):
         f_est=False,
         complete_model=False,
     ):
+        """Computes the nonlinear dynamics of the AUV.
+
+        Args:
+            x: State vector.
+            u: Control input.
+            f_B: Flow state. Defaults to np.zeros((3, 1)).
+            f_B_dot: Acceleration of the flow. Defaults to np.zeros((3, 1)).
+            f_est: Flag to use if flow state estimation is underway. Defaults to False.
+            complete_model: Flag to use the complete model. Defaults to False.
+
+        Returns:
+            chi_dot: Time derivative of the state vector.
+        """
         x = x.reshape(-1, 1)
         u = u.reshape(-1, 1)
         f_B = f_B.reshape(-1, 1)
@@ -184,7 +239,7 @@ class AUV(object):
 
         # Gets the transformation matrix to convert from Body to NED frame
         tf_mtx = self.compute_transformation_matrix(eta)
-        LA.inv(tf_mtx)
+        tf_mtx_inv = LA.inv(tf_mtx)
 
         # nu_c = SX.zeros(6,1)
         nu_c = np.vstack((f_B, np.zeros((3, 1))))
