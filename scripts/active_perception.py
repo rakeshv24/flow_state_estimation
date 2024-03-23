@@ -16,9 +16,9 @@ from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 
 
-
 class APControl:
     def __init__(self):
+        """Initialize the APControl class with the necessary parameters."""
         self.auv_yaml = os.path.join("config", "auv_bluerov2_heavy.yaml")
         self.apc_yaml = os.path.join("config", "apc.yaml")
         self.test_params_yaml = os.path.join("config", "test_params.yaml")
@@ -31,11 +31,20 @@ class APControl:
         self.rbpf_flag = self.test_params["rbpf"]
 
     def load_params(self, filename):
+        """Load the parameters from the YAML file.
+
+        Args:
+            filename: Filename of the YAML file.
+
+        Returns:
+            test_params: Dictionary containing the test parameters.
+        """
         f = open(filename, "r")
         test_params = yaml.load(f.read(), Loader=yaml.SafeLoader)
         return test_params
 
     def initialize_params(self):
+        """Initialize the parameters for the simulation."""
         self.x_ini = np.array([self.test_params["x0"]]).T
         self.env_man = EnvironmentManager(self.auv)
         self.env = self.env_man.init_env(self.env_name, self.env_type, self.env_val)
@@ -163,6 +172,14 @@ class APControl:
         )
 
     def f_state_trans_model(self, x):
+        """Transition model for the flow state.
+
+        Args:
+            x: Vehicle state vector.
+
+        Returns:
+            A: Transition matrix.
+        """
         nu_r2 = x[9:12, :]
         S = skew(nu_r2)
         A = np.eye(3) - S * self.dt
@@ -170,6 +187,14 @@ class APControl:
         return A
 
     def f_meas_model(self, x):
+        """Measurement model for the flow state.
+
+        Args:
+            x: Vehicle state vector.
+
+        Returns:
+            H: Measurement matrix.
+        """
         eta = x[0:6, :]
         nu_r2 = x[9:12, :]
         S = skew(nu_r2)
@@ -180,6 +205,15 @@ class APControl:
         return H
 
     def flow_model_est(self, chi, chi_f):
+        """Model for the flow state estimation.
+
+        Args:
+            chi: Vehicle state vector.
+            chi_f: Flow state vector.
+
+        Returns:
+            f1_B_dot: Flow state derivative.
+        """
         nu_r = chi[6:12, :]
         f1_B = chi_f
         S = skew(nu_r[3:6, :])
@@ -188,6 +222,16 @@ class APControl:
         return f1_B_dot
 
     def auv_state_model(self, chi, u, f_B):
+        """Transition model for the AUV state.
+
+        Args:
+            chi: Vehicle state vector.
+            u: Control input.
+            f_B: Flow state vector.
+
+        Returns:
+            chi_next: Vehicle state vector at next time step.
+        """
         chi = chi.reshape(-1, 1)
         chi_dot = self.auv.compute_nonlinear_dynamics(
             chi, u, f_B, f_est=True, complete_model=True
@@ -197,6 +241,16 @@ class APControl:
         return chi_next[0:12, :]
 
     def auv_meas_model(self, chi, u, f_B):
+        """Measurement model for the AUV state.
+
+        Args:
+            chi: Vehicle state vector.
+            u: Control input.
+            f_B: Flow state vector.
+
+        Returns:
+            zeta: Measurement vector.
+        """
         chi = chi.reshape(-1, 1)
         eta = chi[0:6, :]
         nu_r = chi[6:12, :]
@@ -216,9 +270,22 @@ class APControl:
         return zeta
 
     def wrap_pi2negpi(self, angle):
+        """Wrap the angle between -pi and pi.
+
+        Args:
+            angle: Angle to be wrapped.
+
+        Returns:
+            Wrapped angle.
+        """
         return ((angle + np.pi) % (2 * np.pi)) - np.pi
 
     def run_apc(self, e):
+        """Run the Active Perception Control algorithm.
+
+        Args:
+            e: Environment parameters.
+        """
         for _, e in self.envs.items():
             self.env_val = np.array(e["current"]["value"], dtype=np.float64)
             self.env_name = str(e["current"]["name"])
@@ -239,14 +306,24 @@ class APControl:
                 ).flatten()
 
                 if self.rbpf_flag:
-                    self.nav_est_data["state"]["eta_pred"][:, 0] = self.rbpf.X[0:6].flatten()
-                    self.nav_est_data["state"]["nu_r_pred"][:, 0] = self.rbpf.X[6:12].flatten()
-                    self.nav_est_data["state"]["f_B_pred"][:, 0] = self.rbpf.f_B.flatten()
+                    self.nav_est_data["state"]["eta_pred"][:, 0] = self.rbpf.X[
+                        0:6
+                    ].flatten()
+                    self.nav_est_data["state"]["nu_r_pred"][:, 0] = self.rbpf.X[
+                        6:12
+                    ].flatten()
+                    self.nav_est_data["state"]["f_B_pred"][
+                        :, 0
+                    ] = self.rbpf.f_B.flatten()
                     self.est_data["P_auv_pred"][:, :, 0] = self.rbpf.P
                     self.est_data["P_auv_est"][:, :, 0] = self.rbpf.P
                 else:
-                    self.nav_est_data["state"]["eta_pred"][:, 0] = self.pf.X[0:6].flatten()
-                    self.nav_est_data["state"]["nu_r_pred"][:, 0] = self.pf.X[6:12].flatten()
+                    self.nav_est_data["state"]["eta_pred"][:, 0] = self.pf.X[
+                        0:6
+                    ].flatten()
+                    self.nav_est_data["state"]["nu_r_pred"][:, 0] = self.pf.X[
+                        6:12
+                    ].flatten()
                     self.nav_est_data["state"]["f_B_pred"][:, 0] = self.kf.x.flatten()
                     self.est_data["P_f_pred"][:, :, 0] = self.kf.P
                     self.est_data["P_f_est"][:, :, 0] = self.kf.P
@@ -254,16 +331,22 @@ class APControl:
                     self.est_data["P_auv_est"][:, :, 0] = self.pf.P
 
                 for i in range(len(self.t_span)):
-                    eta_pred = self.nav_est_data["state"]["eta_pred"][:, i].reshape(-1, 1)
-                    nu_r_pred = self.nav_est_data["state"]["nu_r_pred"][:, i].reshape(-1, 1)
-                    f_B_pred = self.nav_est_data["state"]["f_B_pred"][:, i].reshape(-1, 1)
+                    eta_pred = self.nav_est_data["state"]["eta_pred"][:, i].reshape(
+                        -1, 1
+                    )
+                    nu_r_pred = self.nav_est_data["state"]["nu_r_pred"][:, i].reshape(
+                        -1, 1
+                    )
+                    f_B_pred = self.nav_est_data["state"]["f_B_pred"][:, i].reshape(
+                        -1, 1
+                    )
                     chi_auv_pred = np.vstack((eta_pred, nu_r_pred))
                     P_auv_pred = self.est_data["P_auv_pred"][:, :, i]
 
+                    # Solve the AP Control problem
                     u, ctrl_obj = self.apc.ap_control_cg(
                         i, chi_auv_pred, f_B_pred, self.ctrl_obj
                     )
-                    # u = np.zeros((6,))
                     self.ctrl_obj = ctrl_obj
 
                     self.env = self.env_man.handle_env(self.env, self.t_span[i])
@@ -289,20 +372,32 @@ class APControl:
                     chi_true[3:6, :] = self.wrap_pi2negpi(chi_true[3:6, :])
 
                     self.nav_data["state"]["eta"][:, i + 1] = chi_true[0:6, :].flatten()
-                    self.nav_data["state"]["nu_r"][:, i + 1] = chi_true[6:12, :].flatten()
-                    self.nav_data["state"]["f_B"][:, i + 1] = chi_true[12:18, :].flatten()
+                    self.nav_data["state"]["nu_r"][:, i + 1] = chi_true[
+                        6:12, :
+                    ].flatten()
+                    self.nav_data["state"]["f_B"][:, i + 1] = chi_true[
+                        12:18, :
+                    ].flatten()
                     self.nav_data["state"]["nu"][:, i + 1] = (
                         chi_true[6:12, :] + chi_true[12:18, :]
                     ).flatten()
                     self.nav_data["control"]["u"][:, i] = u
-                    self.nav_data["analysis"]["eta_dot"][:, i] = chi_dot[0:6, :].flatten()
-                    self.nav_data["analysis"]["nu_r_dot"][:, i] = chi_dot[6:12, :].flatten()
-                    self.nav_data["analysis"]["f_B_dot"][:, i] = chi_dot[12:18, :].flatten()
+                    self.nav_data["analysis"]["eta_dot"][:, i] = chi_dot[
+                        0:6, :
+                    ].flatten()
+                    self.nav_data["analysis"]["nu_r_dot"][:, i] = chi_dot[
+                        6:12, :
+                    ].flatten()
+                    self.nav_data["analysis"]["f_B_dot"][:, i] = chi_dot[
+                        12:18, :
+                    ].flatten()
                     self.nav_data["analysis"]["nu_dot"][:, i] = (
                         chi_dot[6:12, :] + chi_dot[12:18, :]
                     ).flatten()
 
-                    self.env_data["state"]["f_B"][:, i] = (self.env_flow["f_B"]).flatten()
+                    self.env_data["state"]["f_B"][:, i] = (
+                        self.env_flow["f_B"]
+                    ).flatten()
                     self.env_data["analysis"]["f_B_dot"][:, i] = (
                         self.env_flow["f_B_dot"]
                     ).flatten()
@@ -312,8 +407,12 @@ class APControl:
                     x_true = np.vstack((eta_true, nu_r_true))
                     nu_true = self.nav_data["state"]["nu"][:, i]
                     f_B_true = self.env_data["state"]["f_B"][:, i]
-                    eta_dot_true = self.nav_data["analysis"]["eta_dot"][:, i].reshape(-1, 1)
-                    nu_r_dot_true = self.nav_data["analysis"]["nu_r_dot"][:, i].reshape(-1, 1)
+                    eta_dot_true = self.nav_data["analysis"]["eta_dot"][:, i].reshape(
+                        -1, 1
+                    )
+                    nu_r_dot_true = self.nav_data["analysis"]["nu_r_dot"][:, i].reshape(
+                        -1, 1
+                    )
                     nu_dot_true = self.nav_data["analysis"]["nu_dot"][:, i]
                     f_B_dot_true = self.env_data["analysis"]["f_B_dot"][:, i]
                     chi_auv_true = np.vstack((eta_true, nu_r_true))
@@ -327,7 +426,9 @@ class APControl:
                     nu_r_pred_dot = chi_auv_pred_dot[6:12, :]
                     nu_r_pred = chi_auv_pred[6:12]
 
-                    tf_B2I_est = self.auv.compute_transformation_matrix(chi_auv_pred[0:6, :])
+                    tf_B2I_est = self.auv.compute_transformation_matrix(
+                        chi_auv_pred[0:6, :]
+                    )
                     R_B2I_est = tf_B2I_est[0:3, 0:3]
 
                     eta_z_meas = eta_true[2] + np.sqrt(self.apc.R_z) * np.random.randn()
@@ -335,10 +436,12 @@ class APControl:
                         eta_dot_true[2] + np.sqrt(self.apc.R_dr) * np.random.randn()
                     )
                     ang_vel_meas = (
-                        nu_true[3:6] + np.diag(np.sqrt(self.apc.R_angvel)) * np.random.randn()
+                        nu_true[3:6]
+                        + np.diag(np.sqrt(self.apc.R_angvel)) * np.random.randn()
                     )
                     eta_att_meas = (
-                        eta_true[3:6, 0] + np.diag(np.sqrt(self.apc.R_att)) * np.random.randn()
+                        eta_true[3:6, 0]
+                        + np.diag(np.sqrt(self.apc.R_att)) * np.random.randn()
                     )
                     lin_acc_meas = (
                         nu_dot_true[0:3]
@@ -359,7 +462,15 @@ class APControl:
                     eta_att_meas = eta_att_meas.reshape(3, 1)
                     lin_acc_meas = lin_acc_meas.reshape(3, 1)
 
-                    zeta_auv = np.vstack((eta_z_meas, eta_att_meas, lin_vel_meas, ang_vel_meas, lin_acc_meas))
+                    zeta_auv = np.vstack(
+                        (
+                            eta_z_meas,
+                            eta_att_meas,
+                            lin_vel_meas,
+                            ang_vel_meas,
+                            lin_acc_meas,
+                        )
+                    )
 
                     zeta_f = np.vstack(
                         (
@@ -369,8 +480,12 @@ class APControl:
                         )
                     )
 
+                    # Update the state estimates
                     if self.rbpf_flag:
-                        chi_auv_est, chi_f_est, P_auv_est = self.rbpf.update(zeta_auv, zeta_f, u)
+                        # RBPF
+                        chi_auv_est, chi_f_est, P_auv_est = self.rbpf.update(
+                            zeta_auv, zeta_f, u
+                        )
                         chi_auv_est = chi_auv_est.reshape(-1, 1)
                         chi_auv_est[3:6, :] = self.wrap_pi2negpi(chi_auv_est[3:6, :])
 
@@ -385,6 +500,7 @@ class APControl:
                         chi_auv_pred[3:6, :] = self.wrap_pi2negpi(chi_auv_pred[3:6, :])
 
                     else:
+                        # PF + KF
                         chi_f_est, P_f_est = self.kf.update(chi_auv_pred, zeta_f)
                         chi_auv_est, P_auv_est = self.pf.update(zeta_auv, u, chi_f_est)
                         chi_auv_est = chi_auv_est.reshape(-1, 1)
@@ -407,7 +523,9 @@ class APControl:
                     self.nav_est_data["meas"]["zeta_auv"][:, i] = zeta_auv.flatten()
                     self.nav_est_data["meas"]["zeta_f"][:, i] = zeta_f.flatten()
                     self.nav_est_data["state"]["eta"][:, i] = chi_auv_est[0:6].flatten()
-                    self.nav_est_data["state"]["nu_r"][:, i] = chi_auv_est[6:12].flatten()
+                    self.nav_est_data["state"]["nu_r"][:, i] = chi_auv_est[
+                        6:12
+                    ].flatten()
                     self.nav_est_data["state"]["f_B"][:, i] = chi_f_est.flatten()
                     self.nav_est_data["analysis"]["eta_dot"][:, i] = chi_auv_est_dot[
                         0:6
@@ -415,16 +533,22 @@ class APControl:
                     self.nav_est_data["analysis"]["nu_r_dot"][:, i] = chi_auv_est_dot[
                         6:12
                     ].flatten()
-                    self.nav_est_data["analysis"]["f_B_dot"][:, i] = chi_f_est_dot.flatten()
+                    self.nav_est_data["analysis"]["f_B_dot"][
+                        :, i
+                    ] = chi_f_est_dot.flatten()
                     self.nav_est_data["state"]["eta_pred"][:, i + 1] = chi_auv_pred[
                         0:6
                     ].flatten()
                     self.nav_est_data["state"]["nu_r_pred"][:, i + 1] = chi_auv_pred[
                         6:12
                     ].flatten()
-                    self.nav_est_data["state"]["f_B_pred"][:, i + 1] = chi_f_pred.flatten()
+                    self.nav_est_data["state"]["f_B_pred"][
+                        :, i + 1
+                    ] = chi_f_pred.flatten()
 
-                    self.env_est_data["analysis"]["f_B_dot"][:, i] = chi_f_est_dot.flatten()
+                    self.env_est_data["analysis"]["f_B_dot"][
+                        :, i
+                    ] = chi_f_est_dot.flatten()
 
                     self.est_data["P_auv_pred"][:, :, i + 1] = P_auv_pred
                     self.est_data["P_auv_est"][:, :, i + 1] = P_auv_est
@@ -449,8 +573,8 @@ class APControl:
                     self.est_data["analysis"]["est_f_B_dot_diff"][:, i] = (
                         f_B_dot_true - chi_f_est_dot.flatten()
                     )
-                    self.est_data["analysis"]["est_f_B_dot_sqdiff"][:, i] = np.linalg.norm(
-                        f_B_dot_true - chi_f_est_dot.flatten()
+                    self.est_data["analysis"]["est_f_B_dot_sqdiff"][:, i] = (
+                        np.linalg.norm(f_B_dot_true - chi_f_est_dot.flatten())
                     )
 
                     print(f"T = {round(self.t_span[i],3)}s, Time Index = {i}")
@@ -460,7 +584,8 @@ class APControl:
                     print(f"True Vehicle Pose: {np.round(chi_auv_true[0:6], 3).T}")
                     print(f"Est Vehicle Pose: {np.round(chi_auv_est[0:6], 3).T}")
                     print(
-                        "Diff: ", np.round(self.est_data["analysis"]["est_eta_diff"][:, i], 6)
+                        "Diff: ",
+                        np.round(self.est_data["analysis"]["est_eta_diff"][:, i], 6),
                     )
                     print(
                         "Sq Diff: ",
@@ -470,7 +595,8 @@ class APControl:
                     print(f"True Vehicle Velocity: {np.round(chi_auv_true[6:12], 3).T}")
                     print(f"Est Vehicle Velocity: {np.round(chi_auv_est[6:12], 3).T}")
                     print(
-                        "Diff: ", np.round(self.est_data["analysis"]["est_nu_r_diff"][:, i], 6)
+                        "Diff: ",
+                        np.round(self.est_data["analysis"]["est_nu_r_diff"][:, i], 6),
                     )
                     print(
                         "Sq Diff: ",
@@ -480,18 +606,24 @@ class APControl:
                     print(f"True Flow Velocity (f1): {f_B_true}")
                     print(f"Estimated Flow Velocity (f1'): {chi_f_est.T}")
                     print("Diff: ", self.est_data["analysis"]["est_f_B_diff"][:, i])
-                    print("Sq Diff: ", self.est_data["analysis"]["est_f_B_sqdiff"][:, i])
+                    print(
+                        "Sq Diff: ", self.est_data["analysis"]["est_f_B_sqdiff"][:, i]
+                    )
                     print("----------------------------------------------")
                     print(f"True Flow Acc (f1_dot): {f_B_dot_true}")
                     print(f"Estimated Flow Acc (f1'_dot): {chi_f_est_dot.T}")
                     print("Diff: ", self.est_data["analysis"]["est_f_B_dot_diff"][:, i])
-                    print("Sq Diff: ", self.est_data["analysis"]["est_f_B_dot_sqdiff"][:, i])
+                    print(
+                        "Sq Diff: ",
+                        self.est_data["analysis"]["est_f_B_dot_sqdiff"][:, i],
+                    )
                     print("----------------------------------------------")
                     print("")
 
                 self.plot_graphs()
 
     def plot_graphs(self):
+        """Visualize the simulation results."""
         plt.figure(dpi=100)
         plt.plot(
             self.nav_data["state"]["t"],
@@ -541,6 +673,7 @@ class APControl:
         plt.show()
 
     def main(self):
+        """Main function to run the Active Perception Control algorithm. Multiple test cases are run in parallel."""
         test_cases = []
         for _, e in self.envs.items():
             env_val = np.array(e["current"]["value"], dtype=np.float64)
@@ -549,8 +682,10 @@ class APControl:
             case = [env_val, env_name, env_type]
             test_cases.append(case)
 
-        with Pool(cpu_count()-6) as p:
-            successes = list(tqdm(p.imap_unordered(self.run_apc, test_cases), total=len(test_cases)))
+        with Pool(cpu_count() - 6) as p:
+            successes = list(
+                tqdm(p.imap_unordered(self.run_apc, test_cases), total=len(test_cases))
+            )
 
         print("Successful:")
         print(successes)
