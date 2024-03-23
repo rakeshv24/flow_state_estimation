@@ -489,7 +489,7 @@ class APControl:
                     print("----------------------------------------------")
                     print("")
 
-                # self.plot_graphs()
+                self.plot_graphs()
 
     def plot_graphs(self):
         plt.figure(dpi=100)
