@@ -550,7 +550,7 @@ class APControl:
             test_cases.append(case)
 
         with Pool(cpu_count()-6) as p:
-            successes = list(tqdm(p.imap_unordered(self.run_fse_mpc, test_cases), total=len(test_cases)))
+            successes = list(tqdm(p.imap_unordered(self.run_apc, test_cases), total=len(test_cases)))
 
         print("Successful:")
         print(successes)
