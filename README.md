@@ -1,8 +1,8 @@
 # Active Perception Framework for Flow State Estimation in Autonomous Underwater Vehicles
 
-## Introduction
+## Overview
 
-In this project, we've developed an advanced Rao-Blackwellized Particle Filter (RBPF) framework designed to significantly enhance the precision of flow state estimation and vehicle localization in dynamic environments. Our framework features the integration of two sophisticated methodologies:
+In this project, we've developed an advanced Rao-Blackwellized Particle Filter (RBPF) framework designed to enhance the precision of flow state estimation and vehicle localization in dynamic environments. Our approach draws upon and expands the foundational work presented by [Chang et al. 2022](https://ieeexplore.ieee.org/abstract/document/9679478).
 
 ### Approaches
 
